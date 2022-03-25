@@ -10,6 +10,7 @@ from web3.middleware.filter import block_ranges
 
 from yearn.middleware.middleware import BATCH_SIZE
 from yearn.utils import contract_creation_block, contract
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,27 @@ def create_filter(address, topics=None):
 def __add_deployment_topics(address):
     _add_deployment_topics(address, contract(address).abi)
 
+
+def get_logs_asap_2(topics, from_block=None, to_block=None, verbose=0):
+    logs = []
+
+    if from_block is None:
+        from_block = contract_creation_block(address)
+    if to_block is None:
+        to_block = chain.height
+
+    ranges = list(block_ranges(from_block, to_block, BATCH_SIZE[chain.id]))
+    if verbose > 0:
+        logger.info('fetching %d batches', len(ranges))
+
+    batches = Parallel(8, "threading", verbose=verbose)(
+        delayed(web3.eth.get_logs)({"topics": topics, "fromBlock": start, "toBlock": end})
+        for start, end in tqdm(ranges)
+    )
+    for batch in batches:
+        logs.extend(batch)
+
+    return logs
 
 def get_logs_asap(address, topics, from_block=None, to_block=None, verbose=0):
     logs = []
